@@ -4,8 +4,12 @@ const app = express();
 const User = require('./models/user');
 const { validateSignUpData } = require('./utils/validation');
 const bcrypt = require('bcrypt');
+const cookieParser = require('cookie-parser');
+const jwt = require('jsonwebtoken');
+const {userAuth} = require('./middlewares/auth');
 
 app.use(express.json());
+app.use(cookieParser());
 
 //SignUp Api
 app.post("/signup", async (req,res) => {
@@ -44,11 +48,15 @@ app.post("/login", async (req,res) => {
         if(!user){
             throw new Error("Invalid emailId");
         } 
-        const isPasswordValid = await bcrypt.compare(password, user.password);
+        const isPasswordValid = await user.validatePassword(password);
         if(!isPasswordValid){
             throw new Error("Password is incorrect");
         } else {
+            const token = await user.getJWT();
+            res.cookie("token", token,{expires: new Date(Date.now() + 1000*60*60*24*7),
+            });
             res.send("Login successful");
+            console.log("Login successful");
         }
     } catch(err){
         res.status(400).send("ERROR : " + err.message);
@@ -56,6 +64,23 @@ app.post("/login", async (req,res) => {
     }
 });
 
+app.get("/profile",userAuth, async (req, res) => {
+  try {
+    const user = req.user;
+    res.send(user);
+   
+  } catch (err) {
+    console.error("ERROR: ", err.message);
+    res.status(400).send("ERROR : " + err.message);
+  }
+});
+
+app.post("/sendConnectionRequest", userAuth, async (req,res) => {
+    const user = req.user;
+    
+    res.send(user.firstName + " has sent a connection request");
+})
+;
 //Get user by email
 app.get("/user", async (req,res) => {
     const userEmail = req.body.emailId;
